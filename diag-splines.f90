@@ -27,15 +27,30 @@ program diagsp
 
   complex(kind=8),dimension(nr,ns,ns) :: matcomp
   real(kind=8),dimension(nr,ns,ns) :: u
-  real(kind=8),dimension(nr) :: t
+  real(kind=8),dimension(nr) :: t,tt
 
-  real(kind=8),dimension(:) :: w(ns),rwork(3*ns-2),wr(nr,ns)
+  real(kind=8),dimension(:) :: rwork(3*ns-2),wr(nrr,ns)
+  !real(kind=8),dimension(:) :: w(ns)
+  complex(kind=8),dimension(:) :: w(ns)
   complex(kind=8),dimension(:) :: work(2*ns-1)
   integer :: info
   complex(kind=8),dimension(nr,ns,ns) :: dia
   real(kind=8),dimension(nr,ns) :: adia
 
   real(kind=8),external :: ispline
+
+  interface
+    subroutine SEigensystem(n,A,ldA,d,U,ldU,sort)
+      implicit none
+      integer n, ldA, ldU, sort
+	    complex(kind=8) ::  A(ldA,n), U(ldU,n),d(n)
+      end subroutine
+    subroutine CEigensystem(n,A,ldA,d,U,ldU,sort)
+      implicit none
+      integer n, ldA, ldU, sort
+      complex(kind=8) ::  A(ldA,n), U(ldU,n),d(n)
+    end subroutine
+    end interface
 
   counti=0
   deci=0
@@ -81,61 +96,6 @@ program diagsp
 
   auxma=matr
 
-!  do i=1,ns
-!    do j=1,ns
-!      l=1
-!      do k=1,nrr
-!        if (k.ne.nrr) then
-!          diff=abs(matr(k,i,j)-matr(k+1,i,j))
-!          !der(k)=abs(abs((matr(k+1,i,j)-matr(k,i,j))/(dists(k+1)-dists(k)))-abs((matr(k,i,j)-matr(k-1,i,j))/(dists(k)-dists(k-1))))
-!          if ((diff.gt.4.d0)) then
-!            call reordering(matr,dists,auxma,ns,nrr,i,j,k)!,wut(l))
-!          endif
-!        endif
-!      enddo
-!    enddo
-!  enddo
-
-!  counti=0
-!  deci=0
-!  uni=15
-!  do i=1,ns
-!    counti=counti + 1
-!    decj=0
-!    countj=0
-!    do j=1,ns
-!      countj=countj+1  
-!      if (counti.eq.10) then
-!        deci=deci+1
-!        s11=char(48+deci)
-!        s12=char(48)
-!        counti=0
-!      else
-!        s11=char(48+deci)
-!        s12=char(48+counti)
-!      endif
-
-!      if (countj.eq.10) then
-!        decj=decj+1
-!        s21=char(48+decj)
-!        s22=char(48)
-!        countj=0
-!      else
-!        s21=char(48+decj)
-!        s22=char(48+countj)
-!      endif
-!      outsp="splines-reorders/s"//s11//s12//"-"//s21//s22//".dat"
-!      open(uni,file=outsp,action="write")   
-
-!      do k=2,nrr-1
-!        !der(k)=abs(abs((matr(k+1,i,j)-matr(k,i,j))/(dists(k+1)-dists(k)))-abs((matr(k,i,j)-matr(k-1,i,j))/(dists(k)-dists(k-1))))
-!        write(uni,*) dists(k),i,j,matr(k,i,j),der(k)
-!      enddo
-
-!      close(uni)
-!    enddo
-!  enddo
-
   dr=(dists(nrr)-dists(1))/(nr)
 
   t=0.d0
@@ -176,6 +136,7 @@ program diagsp
       do k=1,nr
         u(k,i,j)=ispline(r,dists,matr(:,i,j),b,c,d,nrr)
         t(k)=r
+
         write(uni,*) r,u(k,i,j)
         r=r+dr
       enddo
@@ -183,13 +144,12 @@ program diagsp
     enddo
   enddo
 
-
-  do k=1,nr
+  do k=1,nrr
     do i=1,ns
       do j=1,ns
-        if (u(k,i,j).ne.0.d0) then
-          v1=u(k,i,j)
-          v2=u(k,j,i)
+        if (matr(k,i,j).ne.0.d0) then
+          v1=matr(k,i,j)
+          v2=matr(k,j,i)
           if ((v1+v2).eq.0.d0) then
             matcomp(k,i,j)=cmplx(0.d0,v1,8)
             matcomp(k,j,i)=cmplx(0.d0,v2,8)
@@ -207,61 +167,55 @@ program diagsp
 
   open(15,file="PECs.out",action="write")
 
-  do k=1,nr
-    call zheev('V','U',ns,matcomp(k,:,:),ns,w,work,2*ns-1,rwork,info)
-    wr(k,:)=w(:)
-    if (info.ne.0) print*,"nope",k
+  do k=1,nrr
+    !call zheev('V','U',ns,matcomp(k,:,:),ns,w,work,2*ns-1,rwork,info)
+    call CEigensystem(ns,matcomp(k,:,:),ns,w,dia,ns,0)
+    !wr(k,:)=sqrt(real(w(:))**2+aimag(w(:))**2)
+    wr(k,:)=real(w(:))
+    !if (info.ne.0) print*,"nope",k
   enddo
 
-  do k=1,nr
-    write(15,*) t(k),wr(k,:)-minval(wr(:,1))
+  r=dists(1)
+  do k=1,nrr
+    t(k)=r
+    r=r+dr
   enddo
+
+  do k=1,nrr
+    write(15,*) dists(k),wr(k,:)-minval(wr(:,1))
+  enddo
+
 
   close(15)
 
-!  t=0.d0
-!  u=0.d0
-!  counti=0
-!  deci=0
-!  uni=15
-!  do i=1,ns
-!    counti=counti + 1
-!    decj=0
-!    countj=0
-!    do j=1,ns
-!      countj=countj+1  
-!      if (counti.eq.10) then
-!        deci=deci+1
-!        s11=char(48+deci)
-!        s12=char(48)
-!        counti=0
-!      else
-!        s11=char(48+deci)
-!        s12=char(48+counti)
-!      endif
-
-!      if (countj.eq.10) then
-!        decj=decj+1
-!        s21=char(48+decj)
-!        s22=char(48)
-!        countj=0
-!      else
-!        s21=char(48+decj)
-!        s22=char(48+countj)
-!      endif
-!      outsp="eigenvect/s"//s11//s12//"-"//s21//s22//".dat"
-!      open(uni,file=outsp,action="write")      
-
-!      do k=1,nr
-!        write(uni,*) t(k),matcomp(k,i,j)
-!      enddo
-
-!      close(uni)
-  
-!    enddo
-!  enddo
-
 end program diagsp
+
+subroutine sorteigenval(n,w,d)
+  !======================================================================
+  !  Sort the eigenvalues in decreasing order
+  !  Jorge Alonso: 2023
+  !----------------------------------------------------------------------
+  !  input..
+  !  n = size of the arrays xi() and yi() (n>=2)
+  !  w = the arrays of eigenvalues
+  !  output..
+  !  d = the arrays of eigenvalues
+  !  comments ...
+  !======================================================================
+  implicit none
+  integer n
+  complex(kind=8) :: w(n),d(n)
+  integer i,j
+
+  do i=1,n-1
+    do j=i+1,n
+      if (real(w(j)).gt.real(w(i))) then
+        w(i)=w(j)
+        d(i)=d(j)
+      endif
+    enddo
+  enddo
+end subroutine sorteigenval
 
 subroutine spline (x, y, b, c, d, n)
   !======================================================================
@@ -449,3 +403,5 @@ subroutine spline (x, y, b, c, d, n)
     enddo
     !enddo
 end subroutine reordering
+
+
